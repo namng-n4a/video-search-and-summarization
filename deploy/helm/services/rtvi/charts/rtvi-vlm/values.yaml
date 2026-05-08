@@ -71,6 +71,16 @@ service:
   port: 8000
   type: ClusterIP
 
+# Temporary: patch captions.py max_length at container start so RTVI VLM accepts longer
+# generations (5000 -> 10000). Mirrors the entrypoint/command wrapper added in compose
+# (deploy/docker/services/rtvi/rtvi-vlm/rtvi-vlm-docker-compose.yml).
+# Remove this wrapper once the RTVI VLM image ships with the desired default.
+captionsPatch:
+  enabled: true
+  maxLength: 10000
+  file: /opt/nvidia/rtvi/rtvi/api_models/captions.py
+  startScript: /opt/nvidia/rtvi/start_rtvi_vlm.sh
+
 # Compose: user 1001:1001, shm 16gb, GPU
 securityContext:
   runAsUser: 1001

@@ -113,6 +113,23 @@ spec:
         - name: vss-rtvi-vlm
           image: {{ include "vss-rtvi-vlm.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- $cp := .Values.captionsPatch | default dict }}
+          {{- if $cp.enabled }}
+          # Temporary: patch captions.py max_length at container start.
+          # Remove this wrapper once the RTVI VLM image ships with the desired default
+          # (drop captionsPatch and revert to the image's default entrypoint).
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              if [ -f {{ $cp.file | quote }} ]; then
+                sed -i 's/max_length=5000,/max_length={{ $cp.maxLength }},/g' {{ $cp.file | quote }}
+                echo "[patch] applied max_length={{ $cp.maxLength }} to captions.py"
+              else
+                echo "[patch] WARNING: captions.py not found" >&2
+              fi
+              exec {{ $cp.startScript }}
+          {{- end }}
           env:
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: {{ $kafkaBs | quote }}
