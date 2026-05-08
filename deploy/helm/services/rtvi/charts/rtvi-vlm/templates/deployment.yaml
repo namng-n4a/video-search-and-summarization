@@ -113,6 +113,20 @@ spec:
         - name: vss-rtvi-vlm
           image: {{ include "vss-rtvi-vlm.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Temporary: patch captions.py max_length at container start.
+          # Remove this wrapper once the RTVI VLM image ships with the desired default (replace image instead of sed here).
+          # Mirrors deploy/docker/services/rtvi/rtvi-vlm/rtvi-vlm-docker-compose.yml entrypoint/command.
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              if [ -f /opt/nvidia/rtvi/rtvi/api_models/captions.py ]; then
+                sed -i 's/max_length=5000,/max_length=10000,/g' /opt/nvidia/rtvi/rtvi/api_models/captions.py
+                echo "[patch] applied max_length=10000 to captions.py"
+              else
+                echo "[patch] WARNING: captions.py not found" >&2
+              fi
+              exec /opt/nvidia/rtvi/start_rtvi_vlm.sh
           env:
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: {{ $kafkaBs | quote }}
