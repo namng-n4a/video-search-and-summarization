@@ -479,12 +479,6 @@ agent:
         value: nim
       - name: VSS_AGENT_OBJECT_STORE_TYPE
         value: local_object_store
-      - name: EXTERNAL_IP
-        value: '{{- $g := .Values.global | default dict }}{{- $eh := index $g "externalHost" | default "" | trim }}{{- $ipRaw := coalesce .Values.externalIp $eh "127.0.0.1" }}{{- $ip := $ipRaw }}{{- if and (hasPrefix "vss-search." $ipRaw) (hasSuffix "nip.io" $ipRaw) }}{{- $ip = $ipRaw | trimPrefix "vss-search." | trimSuffix ".nip.io" }}{{- end }}{{ $ip }}'
-      # In-cluster VST (nginx) host:port — not the public hostname.
-      - name: INTERNAL_IP
-        value: '{{- $g := .Values.global | default dict }}{{- $pfx := default false (coalesce .Values.useReleaseNamePrefix ((index $g "useReleaseNamePrefix") | default false)) }}{{- $viosIng := ternary (printf "%s-vss-vios-ingress:30888" .Release.Name) "vss-vios-ingress:30888" $pfx }}{{ coalesce .Values.vstInternalIp $viosIng }}'
-      # Same as EXTERNAL_IP (search profile: public / browser-reachable address).
       - name: HOST_IP
         value: '{{- $g := .Values.global | default dict }}{{- $eh := index $g "externalHost" | default "" | trim }}{{- $ipRaw := coalesce .Values.externalIp $eh "127.0.0.1" }}{{- $ip := $ipRaw }}{{- if and (hasPrefix "vss-search." $ipRaw) (hasSuffix "nip.io" $ipRaw) }}{{- $ip = $ipRaw | trimPrefix "vss-search." | trimSuffix ".nip.io" }}{{- end }}{{ $ip }}'
       - name: LVS_BACKEND_URL
@@ -493,8 +487,6 @@ agent:
         value: '{{- $g := .Values.global | default dict }}{{- $pfx := default false (coalesce .Values.useReleaseNamePrefix ((index $g "useReleaseNamePrefix") | default false)) }}{{- $cvPort := (.Values.rtviCvPort | default "9000") | toString }}{{- $cvHost := ternary (printf "%s-vss-rtvi-cv" .Release.Name) "vss-rtvi-cv" $pfx }}{{- printf "http://%s:%s" $cvHost $cvPort -}}'
       - name: VSS_ES_PORT
         value: ''
-      - name: VST_BASE_URL
-        value: '{{- if (trim (.Values.vstBaseUrl | default "")) }}{{ trim .Values.vstBaseUrl }}{{- else if (trim (.Values.vstExternalUrl | default "")) }}{{ trim .Values.vstExternalUrl }}{{- end }}'
       - name: VIDEO_ANALYSIS_MCP_URL
         value: '{{- if (trim (.Values.videoAnalysisMcpUrl | default "")) }}{{ trim .Values.videoAnalysisMcpUrl }}{{- else }}{{- $g := .Values.global | default dict }}{{- $pfx := default false (coalesce .Values.useReleaseNamePrefix ((index $g "useReleaseNamePrefix") | default false)) }}{{- $host := ternary (printf "%s-vss-va-mcp" .Release.Name) "vss-va-mcp" $pfx }}{{- printf "http://%s:9901" $host -}}{{- end }}'
       - name: NVIDIA_API_KEY
