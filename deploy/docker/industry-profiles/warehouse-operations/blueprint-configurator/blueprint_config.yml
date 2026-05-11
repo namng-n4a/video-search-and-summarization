@@ -100,7 +100,7 @@ commons:
         allowed_values: ["H100", "L40S", "L40","L4", "RTXA6000", "RTXA6000ADA", "RTXPRO6000BW", "IGX-THOR", "DGX-SPARK"]
 
       - variable: BP_PROFILE
-        allowed_values: ["bp_wh", "bp_wh_kafka", "bp_wh_redis"]
+        allowed_values: ["bp_wh", "bp_wh_kafka", "bp_wh_redis", "auto_calib"]
 
       # STREAM_TYPE can only be "kafka" or "redis"
       - variable: STREAM_TYPE
@@ -166,6 +166,8 @@ commons:
                   matches: "bp_wh_kafka_2d,*"
                 - variable: COMPOSE_PROFILES
                   matches: "bp_wh_redis_2d,*"
+                - variable: COMPOSE_PROFILES
+                  matches: "auto_calib_2d,*"
 
     3d:
       # MDX path variables must be set to real paths, not placeholders or empty
@@ -190,9 +192,9 @@ commons:
       - variable: HARDWARE_PROFILE
         allowed_values: ["H100", "L40S", "L40","L4", "RTXA6000", "RTXA6000ADA", "RTXPRO6000BW", "IGX-THOR", "DGX-SPARK"]
 
-      # BP_PROFILE can only be "bp_wh_kafka", "bp_wh_redis"
+      # BP_PROFILE can only be "bp_wh_kafka", "bp_wh_redis", or "auto_calib"
       - variable: BP_PROFILE
-        allowed_values: ["bp_wh_kafka", "bp_wh_redis"]
+        allowed_values: ["bp_wh_kafka", "bp_wh_redis", "auto_calib"]
 
       # STREAM_TYPE can only be "kafka" or "redis"
       - variable: STREAM_TYPE
@@ -248,6 +250,8 @@ commons:
                   matches: "bp_wh_kafka_3d,*"
                 - variable: COMPOSE_PROFILES
                   matches: "bp_wh_redis_3d,*"
+                - variable: COMPOSE_PROFILES
+                  matches: "auto_calib_3d,*"
 
   variables:
     2d:
