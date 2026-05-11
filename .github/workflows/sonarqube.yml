@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - develop
+  pull_request:
+    branches:
+      - develop
   workflow_dispatch:
 
 concurrency:
@@ -18,6 +21,7 @@ jobs:
     name: SonarQube Scan
     runs-on: sonarqube-workflows-bp-sre
     timeout-minutes: 30
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
     env:
       SONAR_PROJECT_KEY: TEGRASW_metropolis_video-search-and-summarization_video-search-and-summarization
@@ -45,6 +49,11 @@ jobs:
           fi
 
       - name: Write SonarQube configuration
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_BASE_REF: ${{ github.base_ref }}
         run: |
           cat > sonar-project.properties <<EOF
           sonar.projectKey=${SONAR_PROJECT_KEY}
@@ -62,7 +71,13 @@ jobs:
           sonar.test.inclusions=services/agent/tests/**/*.py
           EOF
 
-          if [ -n "${GITHUB_REF_NAME:-}" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            {
+              echo "sonar.pullrequest.key=${PR_NUMBER}"
+              echo "sonar.pullrequest.branch=${PR_HEAD_REF}"
+              echo "sonar.pullrequest.base=${PR_BASE_REF}"
+            } >> sonar-project.properties
+          elif [ -n "${GITHUB_REF_NAME:-}" ]; then
             echo "sonar.branch.name=${GITHUB_REF_NAME}" >> sonar-project.properties
           fi
 
