@@ -96,6 +96,8 @@ env:
     value: "false"
   - name: LVS_EMB_MODEL_NAME
     value: ""
+  - name: LVS_ENABLE_LLM_MERGING
+    value: "false"
   - name: LVS_ENABLE_MCP
     value: "true"
   - name: LVS_MCP_PORT
