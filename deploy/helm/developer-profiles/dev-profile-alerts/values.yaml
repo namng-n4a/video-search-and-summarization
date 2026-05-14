@@ -426,8 +426,15 @@ rtvi:
       - model: nvidia/tao/mask_grounding_dino:mask_grounding_dino_swin_tiny_commercial_deployable_v2.1_wo_mask_arm
         sourcePath: mask_grounding_dino_vmask_grounding_dino_swin_tiny_commercial_deployable_v2.1_wo_mask_arm/mgdino_mask_head_pruned_dynamic_batch.onnx
         destPath: gdino/mgdino_mask_head_pruned_dynamic_batch.onnx
+  # Per-profile perception-sdr-alerts is being retired in favour of the shared
+  # sdr-controller (sdrc) introduced under deploy/docker/services/infra/sdrc/.
+  # Compose service `perception-sdr-alerts` was commented out in PR #410
+  # (feat/sdr-multiworkload); mirror by disabling here. The helm counterpart
+  # for the new sdrc subsystem (sdr-mw-l image, render-config / wdm-env init
+  # containers) does not yet exist and will need a new subchart under
+  # services/infra/charts/sdrc/ — see helm-sync bot comment on PR #410.
   vss-rtvi-cv-sdr:
-    enabled: true
+    enabled: false
     perceptionProvisioningAddress: ""
     vstStatusEndpoint: ""
     vstStreamsEndpoint: ""
