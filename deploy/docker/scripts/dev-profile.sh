@@ -163,22 +163,54 @@ function set_alerts_ui_subtitle_from_mode() {
   esac
 }
 
-# Gets model name from remote API endpoint (works for both LLM and VLM)
-# Arguments: base_url (e.g., http://localhost:30082/v1)
-# Returns: model name from the /models endpoint, or empty string on error
+# Gets model name from remote API endpoint (works for both LLM and VLM).
+# Auto-select is only safe when the endpoint serves exactly one model
+# (e.g., a deployed NIM). For aggregate endpoints like
+# https://integrate.api.nvidia.com/v1/models that list every NIM, the first
+# entry is not a meaningful default (it has historically been a deprecated
+# model such as 01-ai/yi-large), so we require the caller to pass --llm /
+# --vlm explicitly and surface the available models.
+# Arguments:
+#   $1 base_url       e.g. http://localhost:30082 or https://integrate.api.nvidia.com
+#   $2 expected_type  "llm" or "vlm" — used to suggest the right --llm/--vlm flag
+# Returns: model name from the /models endpoint on stdout, or non-zero on error
 function get_remote_model_name() {
   local _base_url="${1}"
-  local _model_name _curl_exit_code
-  
-  _model_name="$(curl -s -f "${_base_url}/v1/models" 2>/dev/null | jq -r '.data[0].id // empty' 2>/dev/null)"
+  local _expected_type="${2:-llm}"
+  local _response _model_count _model_name _curl_exit_code _model_list
+
+  _response="$(curl -s -f "${_base_url}/v1/models" 2>/dev/null)"
   _curl_exit_code=$?
-  
-  if [[ ${_curl_exit_code} -ne 0 ]] || [[ -z "${_model_name}" ]]; then
-    echo "[WARNING] Failed to retrieve model name from ${_base_url}/v1/models" >&2
+
+  if [[ ${_curl_exit_code} -ne 0 ]] || [[ -z "${_response}" ]]; then
+    echo "[WARNING] Failed to retrieve model list from ${_base_url}/v1/models" >&2
     echo ""
     return 1
   fi
-  
+
+  _model_count="$(echo "${_response}" | jq -r '.data | length' 2>/dev/null)"
+  if [[ -z "${_model_count}" ]] || [[ "${_model_count}" == "0" ]] || [[ "${_model_count}" == "null" ]]; then
+    echo "[WARNING] No models returned from ${_base_url}/v1/models" >&2
+    echo ""
+    return 1
+  fi
+
+  if [[ "${_model_count}" -gt 1 ]]; then
+    _model_list="$(echo "${_response}" | jq -r '.data[].id' 2>/dev/null | sed 's/^/    /')"
+    echo "[ERROR] ${_base_url}/v1/models returns ${_model_count} models — auto-select is unsafe (aggregate endpoints list every NIM and the first entry may be deprecated)." >&2
+    echo "[ERROR] Pass --${_expected_type} <model-name> to pick one explicitly. Available models at this endpoint:" >&2
+    echo "${_model_list}" >&2
+    echo ""
+    return 1
+  fi
+
+  _model_name="$(echo "${_response}" | jq -r '.data[0].id // empty' 2>/dev/null)"
+  if [[ -z "${_model_name}" ]]; then
+    echo "[WARNING] Could not extract model id from ${_base_url}/v1/models" >&2
+    echo ""
+    return 1
+  fi
+
   echo "${_model_name}"
   return 0
 }
@@ -189,8 +221,11 @@ function get_env_value() {
   local _val
   if [[ -f "${_env_file}" ]]; then
     _val="$(grep "^${_var_name}=" "${_env_file}" 2>/dev/null | cut -d'=' -f2- | head -1)"
-    _val="${_val#[\'\"]}"
-    _val="${_val%[\'\"]}"
+    # Strip a matching pair of single or double quotes. Per-quote strips avoid a
+    # bash bracket-expression quirk where `[\'\"]` fails to match single quotes
+    # on some shells.
+    _val="${_val#\"}"; _val="${_val%\"}"
+    _val="${_val#\'}"; _val="${_val%\'}"
     echo "${_val}"
   fi
 }
@@ -900,7 +935,7 @@ function print_args() {
       if [[ -n "${llm}" ]]; then
         _llm_model="${llm}"
       else
-        _llm_model="$(get_remote_model_name "${llm_base_url}")"
+        _llm_model="$(get_remote_model_name "${llm_base_url}" "llm")"
       fi
     else
       _llm_model="${llm:-$(get_env_value "${_env_file}" "LLM_NAME")}"
@@ -928,7 +963,7 @@ function print_args() {
       if [[ -n "${vlm}" ]]; then
         _vlm_model="${vlm}"
       else
-        _vlm_model="$(get_remote_model_name "${vlm_base_url}")"
+        _vlm_model="$(get_remote_model_name "${vlm_base_url}" "vlm")"
       fi
     else
       _vlm_model="${vlm:-$(get_env_value "${_env_file}" "VLM_NAME")}"
@@ -1057,7 +1092,7 @@ function state_up() {
     if [[ -n "${llm}" ]]; then
       _llm_name="${llm}"
     else
-      _llm_name="$(get_remote_model_name "${llm_base_url}")"
+      _llm_name="$(get_remote_model_name "${llm_base_url}" "llm")"
       if [[ -z "${_llm_name}" ]]; then
         echo "[ERROR] Could not get LLM model name from ${llm_base_url}/v1/models. Pass --llm <model-name> to override."
         exit 1
@@ -1104,7 +1139,7 @@ function state_up() {
     if [[ -n "${vlm}" ]]; then
       _vlm_name="${vlm}"
     else
-      _vlm_name="$(get_remote_model_name "${vlm_base_url}")"
+      _vlm_name="$(get_remote_model_name "${vlm_base_url}" "vlm")"
       if [[ -z "${_vlm_name}" ]]; then
         echo "[ERROR] Could not get VLM model name from ${vlm_base_url}/v1/models. Pass --vlm <model-name> to override."
         exit 1
@@ -1121,8 +1156,10 @@ function state_up() {
   fi
   if [[ -n "${vlm_base_url}" ]]; then
     set_env_var "VLM_BASE_URL" "${vlm_base_url}"
-    set_env_var "RTVI_VLM_ENDPOINT" "${vlm_base_url}/v1"
-    set_env_var "RTVI_VLM_MODEL_PATH" "none"
+    if [[ "${vlm_mode}" == "remote" ]]; then
+      set_env_var "RTVI_VLM_ENDPOINT" "${vlm_base_url}/v1"
+      set_env_var "RTVI_VLM_MODEL_PATH" "none"
+    fi
   fi
   if [[ "${vlm_mode}" == "remote" ]]; then
     local _vlm_type="${vlm_model_type:-$(get_env_value "${_source_env}" "VLM_MODEL_TYPE")}"
@@ -1134,12 +1171,12 @@ function state_up() {
     set_env_var "OPENAI_API_KEY" "${openai_api_key}" "true"
   fi
 
-  # Alerts + remote VLM: override VLM_PORT to the standard NIM port (30082) and
+  # Alerts/LVS + remote VLM: override VLM_PORT to the standard NIM port (30082) and
   # switch rtvi-vlm to openai-compat mode (cosmos-reason2 is only valid when the
-  # local rtvi-vlm container is serving the model).
-  # The rtvi-vlm container (not deployed when remote) defaults to 8018 for local alerts;
+  # local rtvi-vlm container is serving the integrated checkpoint).
+  # The rtvi-vlm container defaults to 8018 for local deployments;
   # for remote we fall back to 30082 so any VLM_BASE_URL-unset consumer uses the conventional port.
-  if [[ "${profile}" == "alerts" ]] && [[ "${vlm_mode}" == "remote" ]]; then
+  if ([[ "${profile}" == "alerts" ]] || [[ "${profile}" == "lvs" ]]) && [[ "${vlm_mode}" == "remote" ]]; then
     set_env_var "VLM_PORT" "30082"
     set_env_var "RTVI_VLM_MODEL_TO_USE" "openai-compat"
   fi
@@ -1185,17 +1222,14 @@ function state_up() {
     set_env_var "RTVI_VLM_MODEL_TO_USE" "cosmos-reason2"
     set_env_var "RTVI_VLLM_GPU_MEMORY_UTILIZATION" "${RTVI_VLLM_GPU_MEMORY_UTILIZATION:-0.35}"
   fi
-  # Alerts profile for ALL hardware profiles: set VLM name/slug, base URL, and RTVI-related env (fixed configuration)
-  if  ([[ "${profile}" == "alerts" ]]); then
+  # Alerts/LVS profile for ALL hardware profiles: set VLM name/slug, base URL, and RTVI-related env (fixed configuration)
+  if  ([[ "${profile}" == "alerts" ]] || [[ "${profile}" == "lvs" ]]); then
     set_env_var "VLM_NAME_SLUG" "none"
-    # Local VLM only: rtvi-vlm serves cosmos-reason2 locally on port 8018, so fix
-    # VLM_NAME / VLM_BASE_URL / RTVI_VLM_MODEL_PATH to the NIM-packaged cosmos-reason2 model.
-    # RTVI_VLM_MODEL_TO_USE and RTVI_VLM_ENDPOINT come from the profile .env defaults for local
-    # (see dev-profile-alerts/.env). Remote VLM overrides these in the block above via VLM_BASE_URL/vlm.
+    # Local VLM only: rtvi-vlm serves the VLM locally on port 8018. VLM_BASE_URL
+    # needs runtime host_ip injection (source .env has it empty). VLM_NAME and
+    # RTVI_VLM_MODEL_PATH should come straight from the source .env.
     if [[ "${vlm_mode}" != "remote" ]]; then
-      set_env_var "VLM_NAME" "nim_nvidia_cosmos-reason2-8b_hf-1208"
       set_env_var "VLM_BASE_URL" "http://${host_ip}:8018"
-      set_env_var "RTVI_VLM_MODEL_PATH" "ngc:nim/nvidia/cosmos-reason2-8b:hf-1208"
     fi
     # RTVI_VLLM_GPU_MEMORY_UTILIZATION: mirrors NIM NIM_KVCACHE_PERCENT hw-*.env pattern.
     # IGX-THOR/AGX-THOR have no NIM hw env file → ignored here, handled in the hw sub-block below.
@@ -1348,9 +1382,9 @@ function state_up() {
 
     if [[ "${dry_run}" == "true" ]]; then
       echo "[DRY-RUN] mkdir -p ${data_directory}/models"
-      echo "[DRY-RUN] NGC_CLI_API_KEY=<ngc-cli-api-key> ngc registry model download-version nvstaging/tao/rtdetr_2d_warehouse:deployable_efficientvit_l2_v1.0.1 --org nvstaging"
-      echo "[DRY-RUN] mv rtdetr_2d_warehouse_vdeployable_efficientvit_l2_v1.0.1/rtdetr_warehouse_v1.0.1.fp16.onnx ${data_directory}/models/rtdetr_warehouse_v1.0.1.fp16.onnx"
-      echo "[DRY-RUN] rm -rf rtdetr_2d_warehouse_vdeployable_efficientvit_l2_v1.0.1"
+      echo "[DRY-RUN] NGC_CLI_API_KEY=<ngc-cli-api-key> ngc registry model download-version nvstaging/tao/rtdetr_2d_warehouse:deployable_rn50_v1.0.2 --org nvstaging"
+      echo "[DRY-RUN] mv rtdetr_2d_warehouse_vdeployable_rn50_v1.0.2/rtdetr_warehouse_v1.0.2.fp16.onnx ${data_directory}/models/rtdetr_warehouse_v1.0.2.fp16.onnx"
+      echo "[DRY-RUN] rm -rf rtdetr_2d_warehouse_vdeployable_rn50_v1.0.2"
       echo "[DRY-RUN] chmod -R 777 ${data_directory}/models"
     else
       mkdir -p "${data_directory}/models"
@@ -1359,12 +1393,12 @@ function state_up() {
         registry \
         model \
         download-version \
-        nvstaging/tao/rtdetr_2d_warehouse:deployable_efficientvit_l2_v1.0.1 \
+        nvstaging/tao/rtdetr_2d_warehouse:deployable_rn50_v1.0.2 \
         --org nvstaging
 
-      mv rtdetr_2d_warehouse_vdeployable_efficientvit_l2_v1.0.1/rtdetr_warehouse_v1.0.1.fp16.onnx "${data_directory}/models/rtdetr_warehouse_v1.0.1.fp16.onnx"
+      mv rtdetr_2d_warehouse_vdeployable_rn50_v1.0.2/rtdetr_warehouse_v1.0.2.fp16.onnx "${data_directory}/models/rtdetr_warehouse_v1.0.2.fp16.onnx"
 
-      rm -rf rtdetr_2d_warehouse_vdeployable_efficientvit_l2_v1.0.1
+      rm -rf rtdetr_2d_warehouse_vdeployable_rn50_v1.0.2
 
       chmod -R 777 "${data_directory}/models"
       echo "[INFO] RT-DETR model downloaded and installed to ${data_directory}/models"
