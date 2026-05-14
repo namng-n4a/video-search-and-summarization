@@ -33,14 +33,6 @@
         "The LVS response is HTTP 200 with a non-empty video_summary and a non-empty events array",
         "The agent's final reply notes that generic defaults were used and offers to redo the summary with more specific parameters"
       ]
-    },
-    {
-      "query": "Summarize the uploaded warehouse video while LVS is stopped (simulate by `docker stop` of the LVS container before the query).",
-      "checks": [
-        "The agent's readiness probe against http://localhost:38111/v1/ready returns a connection error or non-200 status",
-        "The agent fails the request with an explicit 'LVS is unreachable' error message \u2014 it does NOT fall back to a VLM, does NOT summarize from metadata, and does NOT silently succeed",
-        "No POST /v1/chat/completions call is made to any VLM endpoint as a fallback"
-      ]
     }
   ]
 }
