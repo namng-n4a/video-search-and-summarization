@@ -48,3 +48,7 @@ dependencies:
     version: 26.04.2
     repository: "file://./charts/broker-health-check"
     condition: vss-broker-health-check.enabled
+  - name: mosquitto
+    version: 26.04.2
+    repository: "file://./charts/mosquitto"
+    condition: mosquitto.enabled

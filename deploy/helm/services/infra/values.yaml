@@ -76,3 +76,9 @@ logstash:
 # Optional Job: wait until Kafka and Redis are reachable (e.g. alerts profile). Disabled by default for other stacks.
 vss-broker-health-check:
   enabled: false
+
+# Mosquitto MQTT broker (mirrors deploy/docker/services/infra/compose.yml mosquitto service,
+# enabled by docker compose profiles bp_wh_kafka_mv3dt / bp_wh_redis_mv3dt). MV3DT umbrella
+# / industry-profile parents flip mosquitto.enabled true.
+mosquitto:
+  enabled: false
