@@ -32,8 +32,14 @@ fi
 # deployments/vst/{2d,3d,smc,developer,ps}/, deployments/foundational/,
 # deployments/agents/, deployments/proxy/, and the dev-profile-*
 # compose files.
+# `redis` (bare name) is the post-rename name for the cache container;
+# `mdx-redis` (caught by the `mdx-` prefix) is the pre-rename name —
+# both are listed so warm-pool boxes that still hold the older container
+# get cleaned. Same back-compat reasoning for `metropolis-vss-ui` (now
+# `vss-agent-ui`, caught by `vss-`) and `centralizedb-dev` (now
+# `vss-vios-postgres`, caught by `vss-`).
 docker ps -a --format '{{.Names}}' \
-  | grep -E '^(vss-|mdx-|perception-|rtvi-|alert-|nvstreamer-|sensor-ms-|vst-ingress-|vst-mcp-|vst-file-proxy|centralizedb-|storage-ms-|streamprocessing-ms-|sdr-(http|streamprocessing)-|envoy-(http|streamprocessing)-|rtspserver-ms-|recorder-ms-|replaystream-ms-|livestream-ms-|metropolis-vss-ui|phoenix)' \
+  | grep -E '^(vss-|mdx-|perception-|rtvi-|alert-|nvstreamer-|sensor-ms-|vst-ingress-|vst-mcp-|vst-file-proxy|centralizedb-|storage-ms-|streamprocessing-ms-|sdr-(http|streamprocessing)-|envoy-(http|streamprocessing)-|rtspserver-ms-|recorder-ms-|replaystream-ms-|livestream-ms-|metropolis-vss-ui|phoenix|redis)' \
   | xargs -r docker rm -f
 ```
 

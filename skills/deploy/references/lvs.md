@@ -25,7 +25,7 @@ Long-video summarization. The LLM stack is identical to `base` ([`base.md`](base
 | Shared Logstash | logstash | 9600 | Loads the `mdx-lvs` RTVI → Kafka → ES pipeline |
 | Elasticsearch + Kibana | mdx-elasticsearch-1, kibana | 9200, 5601 | Log/event storage |
 | Kafka | mdx-kafka-1 | 9092 | Message broker (VLM captions topic: `mdx-vlm-captions`) |
-| Redis | mdx-redis-1 | 6379 | Cache |
+| Redis | redis | 6379 | Cache |
 | Phoenix | mdx-phoenix-1 | 6006 | Observability |
 
 ## Default models
